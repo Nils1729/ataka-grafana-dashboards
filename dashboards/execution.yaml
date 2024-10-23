@@ -1,0 +1,904 @@
+dashboard:
+  annotations:
+    list:
+    - builtIn: 1
+      datasource:
+        type: grafana
+        uid: -- Grafana --
+      enable: true
+      hide: true
+      iconColor: rgba(0, 211, 255, 1)
+      name: Annotations & Alerts
+      type: dashboard
+  editable: true
+  fiscalYearStartMonth: 0
+  graphTooltip: 0
+  links: []
+  panels:
+  - datasource:
+      default: false
+      type: grafana-postgresql-datasource
+      uid: ${ataka_database}
+    fieldConfig:
+      defaults:
+        color:
+          mode: fixed
+        custom:
+          align: auto
+          cellOptions:
+            type: auto
+          inspect: false
+        links:
+        - title: ''
+          url: /d/ataka_execution_3f9c1bc9e4/execution-details?${__url_time_range}&${ataka_database:queryparam}&${target:queryparam}&${service:queryparam}&${exploit_history:queryparam}&${exploit:queryparam}&${job:queryparam}&var-execution=${__data.fields["Execution
+            id"]:url}
+        mappings: []
+        thresholds:
+          mode: absolute
+          steps:
+          - color: red
+            value: null
+      overrides:
+      - matcher:
+          id: byName
+          options: OK Flags
+        properties:
+        - id: custom.cellOptions
+          value:
+            type: color-text
+            wrapText: false
+        - id: thresholds
+          value:
+            mode: absolute
+            steps:
+            - color: red
+              value: null
+            - color: green
+              value: 1
+      - matcher:
+          id: byName
+          options: OK Flags
+        properties:
+        - id: custom.cellOptions
+          value:
+            type: color-text
+            wrapText: false
+        - id: color
+          value:
+            mode: thresholds
+    gridPos:
+      h: 13
+      w: 24
+      x: 0
+      y: 0
+    id: 9
+    options:
+      cellHeight: sm
+      footer:
+        countRows: false
+        fields: ''
+        reducer:
+        - sum
+        show: false
+      showHeader: true
+      sortBy: []
+    pluginVersion: 11.2.0
+    targets:
+    - datasource:
+        type: grafana-postgresql-datasource
+        uid: adx011fgrj5z4e
+      editorMode: code
+      format: table
+      rawQuery: true
+      rawSql: |-
+        SELECT
+          executions.timestamp AS "Execution timestamp",
+          executions.id AS "Execution id",
+          executions.job_id AS "Job id",
+          targets.ip AS "Target IP",
+          COUNT(flags_filtered.id) AS "OK Flags"
+        FROM
+          executions
+          JOIN targets ON targets.id = executions.target_id
+          LEFT JOIN (
+            SELECT
+              flags.id, flags.execution_id
+            FROM
+              flags
+            WHERE
+              flags.status = 'OK'
+            ) AS flags_filtered ON flags_filtered.execution_id = executions.id
+        WHERE
+          executions.id IN ( ${execution_nullable:csv} )
+          AND targets.ip IN ( ${target:sqlstring} )
+        GROUP BY
+          executions.id,
+          targets.id
+        ORDER BY
+          executions.timestamp DESC,
+          inet(targets.ip)
+      refId: A
+      sql:
+        columns:
+        - parameters: []
+          type: function
+        groupBy:
+        - property:
+            type: string
+          type: groupBy
+        limit: 50
+    title: Select execution
+    type: table
+  - datasource:
+      default: false
+      type: grafana-postgresql-datasource
+      uid: ${ataka_database}
+    fieldConfig:
+      defaults:
+        color:
+          mode: thresholds
+        custom:
+          align: auto
+          cellOptions:
+            type: auto
+          inspect: false
+        mappings: []
+        thresholds:
+          mode: absolute
+          steps:
+          - color: green
+            value: null
+          - color: red
+            value: 80
+      overrides:
+      - matcher:
+          id: byName
+          options: stdout
+        properties:
+        - id: mappings
+          value:
+          - options:
+              'false':
+                color: red
+                index: 1
+                text: stderr
+              'true':
+                color: green
+                index: 0
+                text: stdout
+            type: value
+        - id: custom.cellOptions
+          value:
+            type: color-text
+    gridPos:
+      h: 12
+      w: 15
+      x: 0
+      y: 13
+    id: 3
+    options:
+      cellHeight: sm
+      footer:
+        countRows: false
+        fields: ''
+        reducer:
+        - sum
+        show: false
+      showHeader: true
+      sortBy:
+      - desc: false
+        displayName: flag
+    pluginVersion: 11.2.0
+    targets:
+    - datasource:
+        type: grafana-postgresql-datasource
+        uid: ${ataka_database}
+      editorMode: code
+      format: table
+      rawQuery: true
+      rawSql: |-
+        SELECT
+          flags.flag,
+          flags.status,
+          flags.stdout
+        FROM
+          executions
+          JOIN flags ON flags.execution_id = executions.id
+        WHERE executions.id IN ( ${execution_nullable:csv} )
+        ORDER BY flags.timestamp ASC
+        LIMIT 100
+      refId: A
+      sql:
+        columns:
+        - parameters: []
+          type: function
+        groupBy:
+        - property:
+            type: string
+          type: groupBy
+        limit: 50
+    title: Flags
+    type: table
+  - datasource:
+      default: false
+      type: grafana-postgresql-datasource
+      uid: ${ataka_database}
+    fieldConfig:
+      defaults:
+        color:
+          mode: palette-classic
+        custom:
+          hideFrom:
+            legend: false
+            tooltip: false
+            viz: false
+        mappings: []
+      overrides:
+      - matcher:
+          id: byName
+          options: UNKNOWN
+        properties:
+        - id: color
+          value:
+            fixedColor: white
+            mode: fixed
+      - matcher:
+          id: byName
+          options: OK
+        properties:
+        - id: color
+          value:
+            fixedColor: green
+            mode: fixed
+      - matcher:
+          id: byName
+          options: QUEUED
+        properties:
+        - id: color
+          value:
+            fixedColor: yellow
+            mode: fixed
+      - matcher:
+          id: byName
+          options: PENDING
+        properties:
+        - id: color
+          value:
+            fixedColor: purple
+            mode: fixed
+      - matcher:
+          id: byName
+          options: DUPLICATE
+        properties:
+        - id: color
+          value:
+            fixedColor: '#717171'
+            mode: fixed
+      - matcher:
+          id: byName
+          options: DUPLICATE_NOT_SUBMITTED
+        properties:
+        - id: color
+          value:
+            fixedColor: '#717171'
+            mode: fixed
+      - matcher:
+          id: byName
+          options: ERROR
+        properties:
+        - id: color
+          value:
+            fixedColor: red
+            mode: fixed
+      - matcher:
+          id: byName
+          options: NOP
+        properties:
+        - id: color
+          value:
+            fixedColor: orange
+            mode: fixed
+      - matcher:
+          id: byName
+          options: OWNFLAG
+        properties:
+        - id: color
+          value:
+            fixedColor: orange
+            mode: fixed
+      - matcher:
+          id: byName
+          options: INACTIVE
+        properties:
+        - id: color
+          value:
+            fixedColor: dark-orange
+            mode: fixed
+      - matcher:
+          id: byName
+          options: INVALID
+        properties:
+        - id: color
+          value:
+            fixedColor: orange
+            mode: fixed
+      - matcher:
+          id: byName
+          options: RESUBMIT
+        properties:
+        - id: color
+          value:
+            fixedColor: blue
+            mode: fixed
+      - matcher:
+          id: byName
+          options: <Null>
+        properties:
+        - id: color
+          value:
+            fixedColor: '#ffffff'
+            mode: fixed
+    gridPos:
+      h: 12
+      w: 5
+      x: 15
+      y: 13
+    id: 8
+    options:
+      displayLabels:
+      - value
+      - name
+      legend:
+        displayMode: table
+        placement: bottom
+        showLegend: true
+        values:
+        - value
+      pieType: pie
+      reduceOptions:
+        calcs:
+        - lastNotNull
+        fields: ''
+        values: true
+      tooltip:
+        mode: multi
+        sort: none
+    pluginVersion: 11.2.0
+    targets:
+    - datasource:
+        type: grafana-postgresql-datasource
+        uid: ${ataka_database}
+      editorMode: code
+      format: table
+      hide: false
+      rawQuery: true
+      rawSql: |-
+        SELECT
+          flags.status,
+          COUNT(flags.flag)
+        FROM
+          executions
+          JOIN flags ON flags.execution_id = executions.id
+        WHERE executions.id IN ( ${execution_nullable:csv} )
+        GROUP BY flags.status
+        ;
+      refId: A
+      sql:
+        columns:
+        - parameters: []
+          type: function
+        groupBy:
+        - property:
+            type: string
+          type: groupBy
+        limit: 50
+    title: Flag status
+    transformations:
+    - id: rowsToFields
+      options:
+        mappings:
+        - fieldName: status
+          handlerKey: field.name
+        - fieldName: count
+          handlerKey: field.value
+    type: piechart
+  - datasource:
+      default: false
+      type: grafana-postgresql-datasource
+      uid: ${ataka_database}
+    description: ''
+    fieldConfig:
+      defaults:
+        color:
+          mode: thresholds
+        mappings: []
+        thresholds:
+          mode: absolute
+          steps:
+          - color: text
+            value: null
+      overrides: []
+    gridPos:
+      h: 12
+      w: 4
+      x: 20
+      y: 13
+    id: 2
+    options:
+      colorMode: value
+      graphMode: none
+      justifyMode: center
+      orientation: auto
+      percentChangeColorMode: standard
+      reduceOptions:
+        calcs:
+        - lastNotNull
+        fields: /.*/
+        values: false
+      showPercentChange: false
+      textMode: value
+      wideLayout: true
+    pluginVersion: 11.2.0
+    targets:
+    - datasource:
+        type: grafana-postgresql-datasource
+        uid: ${ataka_database}
+      editorMode: code
+      format: table
+      rawQuery: true
+      rawSql: SELECT CAST(EXTRACT(EPOCH FROM ((SELECT timestamp FROM executions WHERE
+        id IN ( ${execution_nullable:csv} ) ORDER BY id DESC LIMIT 1) - TIMESTAMP
+        '$ctf_start')) AS INTEGER) / CAST(EXTRACT(EPOCH FROM INTERVAL '$tick_time')
+        AS INTEGER) as current_tick;
+      refId: A
+      sql:
+        columns:
+        - parameters: []
+          type: function
+        groupBy:
+        - property:
+            type: string
+          type: groupBy
+        limit: 50
+    title: Viewing Tick
+    type: stat
+  - datasource:
+      default: false
+      type: grafana-postgresql-datasource
+      uid: ${ataka_database}
+    fieldConfig:
+      defaults:
+        color:
+          mode: thresholds
+        custom:
+          align: auto
+          cellOptions:
+            type: json-view
+          inspect: true
+        mappings: []
+        thresholds:
+          mode: absolute
+          steps:
+          - color: green
+            value: null
+          - color: red
+            value: 80
+      overrides: []
+    gridPos:
+      h: 8
+      w: 24
+      x: 0
+      y: 25
+    id: 5
+    options:
+      cellHeight: sm
+      footer:
+        countRows: false
+        fields: ''
+        reducer:
+        - sum
+        show: false
+      showHeader: false
+    pluginVersion: 11.2.0
+    targets:
+    - datasource:
+        type: grafana-postgresql-datasource
+        uid: ${ataka_database}
+      editorMode: code
+      format: table
+      rawQuery: true
+      rawSql: |
+        SELECT
+          targets.extra
+        FROM
+          executions
+          JOIN targets ON targets.id = executions.target_id
+        WHERE
+          executions.id IN ( ${execution_nullable:csv} )
+        ORDER BY
+          executions.id DESC
+        LIMIT 10
+      refId: A
+      sql:
+        columns:
+        - parameters: []
+          type: function
+        groupBy:
+        - property:
+            type: string
+          type: groupBy
+        limit: 50
+    title: Extra
+    type: table
+  - datasource:
+      default: false
+      type: grafana-postgresql-datasource
+      uid: ${ataka_database}
+    fieldConfig:
+      defaults:
+        color:
+          mode: thresholds
+        custom:
+          align: auto
+          cellOptions:
+            type: json-view
+          inspect: true
+        mappings: []
+        thresholds:
+          mode: absolute
+          steps:
+          - color: green
+            value: null
+          - color: red
+            value: 80
+      overrides: []
+    gridPos:
+      h: 11
+      w: 12
+      x: 0
+      y: 33
+    id: 6
+    options:
+      cellHeight: sm
+      footer:
+        countRows: false
+        fields: ''
+        reducer:
+        - sum
+        show: false
+      showHeader: false
+    pluginVersion: 11.2.0
+    targets:
+    - datasource:
+        type: grafana-postgresql-datasource
+        uid: ${ataka_database}
+      editorMode: code
+      format: table
+      rawQuery: true
+      rawSql: |
+        SELECT
+          executions.stdout
+        FROM
+          executions
+        WHERE
+          executions.id IN ( ${execution_nullable:csv} )
+        ORDER BY
+          executions.id DESC
+        LIMIT 10
+      refId: A
+      sql:
+        columns:
+        - parameters: []
+          type: function
+        groupBy:
+        - property:
+            type: string
+          type: groupBy
+        limit: 50
+    title: Stdout
+    type: table
+  - datasource:
+      default: false
+      type: grafana-postgresql-datasource
+      uid: ${ataka_database}
+    fieldConfig:
+      defaults:
+        color:
+          mode: thresholds
+        custom:
+          align: auto
+          cellOptions:
+            type: json-view
+          inspect: true
+        mappings: []
+        thresholds:
+          mode: absolute
+          steps:
+          - color: green
+            value: null
+          - color: red
+            value: 80
+      overrides: []
+    gridPos:
+      h: 11
+      w: 12
+      x: 12
+      y: 33
+    id: 7
+    options:
+      cellHeight: sm
+      footer:
+        countRows: false
+        fields: ''
+        reducer:
+        - sum
+        show: false
+      showHeader: false
+    pluginVersion: 11.2.0
+    targets:
+    - datasource:
+        type: grafana-postgresql-datasource
+        uid: ${ataka_database}
+      editorMode: code
+      format: table
+      rawQuery: true
+      rawSql: |
+        SELECT
+          executions.stderr
+        FROM
+          executions
+        WHERE
+          executions.id IN ( ${execution_nullable:csv} )
+        ORDER BY
+          executions.id DESC
+        LIMIT 10
+      refId: A
+      sql:
+        columns:
+        - parameters: []
+          type: function
+        groupBy:
+        - property:
+            type: string
+          type: groupBy
+        limit: 50
+    title: Stderr
+    type: table
+  refresh: 30s
+  schemaVersion: 39
+  tags: []
+  templating:
+    list:
+    - current:
+        selected: false
+        text: ataka-postgresql
+        value: cdxbc5hy5adj4b
+      hide: 0
+      includeAll: false
+      multi: false
+      name: ataka_database
+      options: []
+      query: grafana-postgresql-datasource
+      queryValue: ''
+      refresh: 1
+      regex: ''
+      skipUrlSync: false
+      type: datasource
+    - hide: 2
+      name: ctf_start
+      query: '1970-00-00T00:00:00.000Z'
+      skipUrlSync: false
+      type: constant
+    - hide: 2
+      name: tick_time
+      query: 1m
+      skipUrlSync: false
+      type: constant
+    - current:
+        selected: false
+        text: 10.60.8.1
+        value: 10.60.8.1
+      datasource:
+        type: grafana-postgresql-datasource
+        uid: ${ataka_database}
+      definition: |-
+        SELECT targets.ip
+        FROM targets
+        GROUP BY targets.ip
+        ORDER BY inet(targets.ip)
+      hide: 0
+      includeAll: true
+      multi: true
+      name: target
+      options: []
+      query: |-
+        SELECT targets.ip
+        FROM targets
+        GROUP BY targets.ip
+        ORDER BY inet(targets.ip)
+      refresh: 1
+      regex: ''
+      skipUrlSync: false
+      sort: 7
+      type: query
+    - current:
+        selected: false
+        text: 0day-1
+        value: 0day-1
+      datasource:
+        type: grafana-postgresql-datasource
+        uid: ${ataka_database}
+      definition: SELECT targets.service FROM targets GROUP BY targets.service ORDER
+        BY targets.service;
+      hide: 0
+      includeAll: true
+      multi: true
+      name: service
+      options: []
+      query: SELECT targets.service FROM targets GROUP BY targets.service ORDER BY
+        targets.service;
+      refresh: 1
+      regex: ''
+      skipUrlSync: false
+      sort: 0
+      type: query
+    - current:
+        selected: false
+        text: 0day_invalid_whitelist_check
+        value: 0day_invalid_whitelist_check
+      datasource:
+        type: grafana-postgresql-datasource
+        uid: ${ataka_database}
+      definition: SELECT exploit_histories.id FROM exploit_histories WHERE exploit_histories.service
+        IN ($service);
+      hide: 0
+      includeAll: false
+      multi: true
+      name: exploit_history
+      options: []
+      query: SELECT exploit_histories.id FROM exploit_histories WHERE exploit_histories.service
+        IN ($service);
+      refresh: 1
+      regex: ''
+      skipUrlSync: false
+      sort: 0
+      type: query
+    - current:
+        selected: false
+        text: 0day_invalid_whitelist_check-2
+        value: 0day_invalid_whitelist_check-2
+      datasource:
+        type: grafana-postgresql-datasource
+        uid: ${ataka_database}
+      definition: |-
+        SELECT exploits.id
+        FROM exploits
+        WHERE exploits.exploit_history_id IN ( $exploit_history )
+      description: ''
+      hide: 0
+      includeAll: false
+      multi: true
+      name: exploit
+      options: []
+      query: |-
+        SELECT exploits.id
+        FROM exploits
+        WHERE exploits.exploit_history_id IN ( $exploit_history )
+      refresh: 1
+      regex: ''
+      skipUrlSync: false
+      sort: 2
+      type: query
+    - current:
+        selected: false
+        text: '115'
+        value: '115'
+      datasource:
+        type: grafana-postgresql-datasource
+        uid: ${ataka_database}
+      definition: |-
+        SELECT jobs.id
+        FROM jobs
+        WHERE jobs.exploit_id IN ( $exploit )
+      description: ''
+      hide: 0
+      includeAll: true
+      multi: true
+      name: job
+      options: []
+      query: |-
+        SELECT jobs.id
+        FROM jobs
+        WHERE jobs.exploit_id IN ( $exploit )
+      refresh: 1
+      regex: ''
+      skipUrlSync: false
+      sort: 4
+      type: query
+    - allValue: ''
+      current:
+        selected: false
+        text: '98'
+        value: '98'
+      datasource:
+        type: grafana-postgresql-datasource
+        uid: ${ataka_database}
+      definition: |-
+        SELECT
+          executions.id
+        FROM
+          executions
+          JOIN jobs ON jobs.id = executions.job_id
+          JOIN targets ON targets.id = executions.target_id
+        WHERE jobs.id IN ( ${job_nullable:csv} )
+          AND targets.ip IN ( $target )
+      hide: 0
+      includeAll: true
+      multi: true
+      name: execution
+      options: []
+      query: |-
+        SELECT
+          executions.id
+        FROM
+          executions
+          JOIN jobs ON jobs.id = executions.job_id
+          JOIN targets ON targets.id = executions.target_id
+        WHERE jobs.id IN ( ${job_nullable:csv} )
+          AND targets.ip IN ( $target )
+      refresh: 1
+      regex: ''
+      skipUrlSync: false
+      sort: 4
+      type: query
+    - current:
+        selected: false
+        text: ''
+        value: ''
+      datasource:
+        type: grafana-postgresql-datasource
+        uid: ${ataka_database}
+      definition: SELECT CASE WHEN '${execution:csv}' IN ('', ' ') THEN '-1' ELSE
+        '${execution:csv}' END
+      hide: 2
+      includeAll: false
+      multi: false
+      name: execution_nullable
+      options: []
+      query: SELECT CASE WHEN '${execution:csv}' IN ('', ' ') THEN '-1' ELSE '${execution:csv}'
+        END
+      refresh: 1
+      regex: ''
+      skipUrlSync: false
+      sort: 0
+      type: query
+    - current:
+        selected: false
+        text: '-1'
+        value: '-1'
+      datasource:
+        type: grafana-postgresql-datasource
+        uid: ${ataka_database}
+      definition: SELECT CASE WHEN '${job:csv}' IN ('', ' ') THEN '-1' ELSE '${job:csv}'
+        END
+      hide: 2
+      includeAll: false
+      multi: false
+      name: job_nullable
+      options: []
+      query: SELECT CASE WHEN '${job:csv}' IN ('', ' ') THEN '-1' ELSE '${job:csv}'
+        END
+      refresh: 1
+      regex: ''
+      skipUrlSync: false
+      sort: 0
+      type: query
+  time:
+    from: now-6h
+    to: now
+  timepicker: {}
+  timezone: browser
+  title: Execution Details
+  uid: ataka_execution_3f9c1bc9e4
+  weekStart: ''
+overwrite: true

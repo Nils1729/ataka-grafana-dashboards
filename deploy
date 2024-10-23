@@ -1,0 +1,181 @@
+#!/usr/bin/env python3
+
+'''
+Simple command line tool to customize and upload grafana dashboards
+Built for grafana dashoards for ataka.
+'''
+
+from pathlib import Path
+import argparse
+import subprocess
+import json
+import os
+
+import requests
+import yaml
+
+DASHBOARD_FOLDER = Path(__file__).with_name('dashboards')
+
+
+def get_description():
+    short = subprocess.check_output(
+        'git describe --always --tags --dirty --long --all'.split(),
+        cwd=DASHBOARD_FOLDER
+    ).decode().strip()
+    commit_msg = subprocess.check_output(
+        'git log -1'.split(),
+        cwd=DASHBOARD_FOLDER
+    ).decode().strip()
+
+    return f'''
+Import dashboard state {short} by script.
+
+Latest commit:
+{commit_msg}
+'''
+
+
+def stringify_dashboard(dashboard_json):
+    dashboard_json['dashboard'].pop('id', None)
+    dashboard_json['dashboard'].pop('version', None)
+    store_data = {
+        'dashboard': dashboard_json['dashboard'],
+        'overwrite': True,
+    }
+
+    def str_representer(dumper, data):
+        '''
+        Prefer multiline strings for prettier SQL
+        '''
+        if '\n' in data:
+            style = '|'
+        else:
+            style = None
+        return dumper.represent_scalar('tag:yaml.org,2002:str', data, style=style)
+
+    yaml.representer.SafeRepresenter.add_representer(str, str_representer)
+    return yaml.safe_dump(store_data, indent=2)
+
+
+def import_dashboards(args: argparse.Namespace):
+    for dashboard_file in args.dashboards:
+        with dashboard_file.open() as f:
+            dashboard_json = yaml.safe_load(f)
+
+        dashboard_json['message'] = get_description()
+        with requests.post(
+            url=f'{args.host}/api/dashboards/db',
+            json=dashboard_json,
+            timeout=10,
+            headers={'Authorization': f'Bearer {args.token}'},
+        ) as r:
+            if r.status_code != 200:
+                print(r.text)
+            print(f'Imported from {dashboard_file.name}, status {r.status_code}')
+
+
+def print_dashboards(args: argparse.Namespace):
+    for dashboard_file in args.dashboards:
+        with dashboard_file.open('r') as f:
+            dashboard_json_old = yaml.safe_load(f)
+            print(json.dumps(dashboard_json_old['dashboard'], indent=2))
+
+
+def export_dashboards(args: argparse.Namespace):
+    for dashboard_file in args.dashboards:
+        with dashboard_file.open('r') as f:
+            dashboard_json_old = yaml.safe_load(f)
+        dashboard_id = dashboard_json_old['dashboard']['uid']
+        with requests.get(
+            url=f'{args.host}/api/dashboards/uid/{dashboard_id}',
+            timeout=10,
+            headers={'Authorization': f'Bearer {args.token}'},
+        ) as r:
+            if r.status_code != 200:
+                print(f'Error exporting {dashboard_id}')
+                print(r.text)
+                return
+            dashboard_json = r.json()
+        dashboard_yaml = stringify_dashboard(dashboard_json)
+        with dashboard_file.open('w') as f:
+            f.write(dashboard_yaml)
+        print(f'Exported to {dashboard_file.name}')
+
+
+def patch_dashboards(args: argparse.Namespace):
+    for dashboard_file in args.dashboards:
+        with dashboard_file.open('r') as f:
+            json = yaml.safe_load(f)
+        _path_dashboard(args.variable, args.value, json)
+        with dashboard_file.open('w') as f:
+            f.write(stringify_dashboard(json))
+
+
+def _path_dashboard(variable, value, json):
+    match variable:
+        case 'ctf_start' | 'tick_time':
+            for var in json['dashboard']['templating']['list']:
+                if var['name'] == variable:
+                    match var['type']:
+                        case 'constant':
+                            var['query'] = value
+                        case 'query':
+                            var['current']['value'] = value
+                        case t:
+                            print(f'ERROR: Unknown variable type {t}')
+        case 'refresh':
+            json['dashboard'][variable] = value
+        case 'time-from':
+            json['dashboard']['time']['from'] = value
+        case 'time-to':
+            json['dashboard']['time']['to'] = value
+        case str(variable):
+            print(f'ERROR: Unknown variable {variable}')
+
+
+def main():
+    dashboard_files = {p.name.rstrip('.yaml'): p for p in DASHBOARD_FOLDER.glob('*.yaml')}
+
+    parser = argparse.ArgumentParser(description='Grafana dashboards API')
+
+    parser.add_argument('-d', '--dashbaord', dest='dashboards', action='append',
+                        help='Dashboard names to act upon', choices=dashboard_files.keys())
+    subparsers = parser.add_subparsers(title='subcommands')
+
+    import_parser = subparsers.add_parser('print')
+    import_parser.set_defaults(func=print_dashboards)
+
+    import_parser = subparsers.add_parser('import')
+    import_parser.add_argument('--host', default=os.environ.get('GRAFANA_HOST'), dest='host')
+    import_parser.set_defaults(func=import_dashboards, need_token=True)
+
+    export_parser = subparsers.add_parser('export')
+    export_parser.add_argument('--host', default=os.environ.get('GRAFANA_HOST'), dest='host')
+    export_parser.set_defaults(func=export_dashboards, need_token=True)
+
+    export_parser = subparsers.add_parser('set')
+    export_parser.set_defaults(func=patch_dashboards)
+    export_parser.add_argument('variable', help='variable name, e.g. ctf_start, tick_time, ...')
+    export_parser.add_argument('value')
+
+    args = parser.parse_args()
+
+    if args.dashboards is not None:
+        args.dashboards = [
+            dashboard_files[dbn] for dbn in args.dashboards
+        ]
+    else:
+        args.dashboards = list(dashboard_files.values())
+    if 'need_token' in args and args.need_token:
+        args.token = (
+            os.environ.get('GRAFANA_TOKEN') or
+            input('Please enter a service account token for grafana or set GRAFANA_TOKEN and try again: ')) \
+            .strip()
+    if 'func' in args:
+        args.func(args)
+    else:
+        parser.print_help()
+
+
+if __name__ == '__main__':
+    main()
